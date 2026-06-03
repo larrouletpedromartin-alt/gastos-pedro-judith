@@ -61,6 +61,20 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 <div class="person"><h3>Judith</h3><div class="line"><span>Porcentaje</span><span class="val" id="porcentajeJudith">0%</span></div><div class="line"><span>Aporte proporcional</span><span class="val" id="aporteJudith">$0</span></div><div class="line solo-sr"><span>Total tildado J</span><span class="val" id="totalJudith">$0</span></div><div class="line solo-sr"><span>Diferencia</span><span class="val" id="diferenciaJudith">$0</span></div></div>
 </div>
 </section>
+<section class="historial">
+<h2>Historial anual</h2>
+<p class="hint">Muestra los totales guardados en Supabase para el año seleccionado.</p>
+<div class="hist-actions">
+<button class="secondary" onclick="cargarHistorial()">Actualizar historial</button>
+</div>
+<div class="table-wrap hist-table">
+<table>
+<thead><tr><th>Mes</th><th>Total Martín</th><th>Total SR</th><th>Total general</th></tr></thead>
+<tbody id="tablaHistorial"><tr><td colspan="4">Tocá “Actualizar historial”.</td></tr></tbody>
+</table>
+</div>
+</section>
+
 <div class="actions">
 <button onclick="guardarTodo()">Guardar online</button>
 <button class="secondary" onclick="recargar()">Recargar desde Supabase</button>
@@ -303,6 +317,74 @@ async function crearPeriodo() {
   }
 }
 
+async function cargarHistorial() {
+  try {
+    const anio = Number(anioInput.value) || new Date().getFullYear();
+    setEstado("Cargando historial " + anio + "...");
+
+    const desde = nombresMeses.map(m => m + " " + anio);
+
+    const mRes = await db.from("meses").select("*").in("nombre", desde);
+    if (mRes.error) throw mRes.error;
+
+    const mesesAnio = mRes.data || [];
+    const ids = mesesAnio.map(m => m.id);
+
+    const tbody = document.getElementById("tablaHistorial");
+    tbody.innerHTML = "";
+
+    if (!ids.length) {
+      tbody.innerHTML = "<tr><td colspan='4'>No hay períodos cargados para " + anio + ".</td></tr>";
+      setEstado("Historial cargado.");
+      return;
+    }
+
+    const gRes = await db.from("gastos").select("mes_id, monto, solapa").in("mes_id", ids);
+    if (gRes.error) throw gRes.error;
+
+    const gastosHist = gRes.data || [];
+    let totalAnualMartin = 0;
+    let totalAnualSr = 0;
+    let totalAnualGeneral = 0;
+
+    nombresMeses.forEach(nombreMes => {
+      const nombrePeriodo = nombreMes + " " + anio;
+      const mesObj = mesesAnio.find(m => m.nombre === nombrePeriodo);
+      if (!mesObj) return;
+
+      const filas = gastosHist.filter(g => g.mes_id === mesObj.id);
+      const totalMartin = filas.filter(g => g.solapa === "martin").reduce((s, g) => s + (Number(g.monto) || 0), 0);
+      const totalSr = filas.filter(g => g.solapa === "sr").reduce((s, g) => s + (Number(g.monto) || 0), 0);
+      const totalGeneral = totalMartin + totalSr;
+
+      totalAnualMartin += totalMartin;
+      totalAnualSr += totalSr;
+      totalAnualGeneral += totalGeneral;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td><b>" + nombreMes + "</b></td>" +
+        "<td>" + money(totalMartin) + "</td>" +
+        "<td>" + money(totalSr) + "</td>" +
+        "<td><b>" + money(totalGeneral) + "</b></td>";
+      tbody.appendChild(tr);
+    });
+
+    const trTotal = document.createElement("tr");
+    trTotal.innerHTML =
+      "<td><b>Total año</b></td>" +
+      "<td><b>" + money(totalAnualMartin) + "</b></td>" +
+      "<td><b>" + money(totalAnualSr) + "</b></td>" +
+      "<td><b>" + money(totalAnualGeneral) + "</b></td>";
+    tbody.appendChild(trTotal);
+
+    setEstado("Historial cargado.");
+  } catch (err) {
+    console.error(err);
+    setEstado("Error al cargar historial: " + err.message);
+  }
+}
+
 async function recargar() {
   try { await cargarMes(mesActual); }
   catch (err) { console.error(err); setEstado("Error al recargar: " + err.message); }
@@ -312,7 +394,9 @@ mesSelect.addEventListener("change", seleccionarPeriodo);
 anioInput.addEventListener("change", seleccionarPeriodo);
 document.addEventListener("input", calcular);
 document.addEventListener("change", calcular);
-cargarBase().catch(err => { console.error(err); setEstado("Error al cargar: " + err.message); });
+cargarBase()
+  .then(() => cargarHistorial())
+  .catch(err => { console.error(err); setEstado("Error al cargar: " + err.message); });
 </script>
 </body>
 </html>
