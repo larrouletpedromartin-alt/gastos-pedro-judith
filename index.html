@@ -123,14 +123,11 @@ async function cargarBase() {
   anioInput.value = anioInput.value || hoy.getFullYear();
   llenarMesesDelAnio(Number(anioInput.value));
 
-  // Si ya existe algún mes cargado, intentar mostrar el más reciente.
-  if (!mesActual && meses.length) {
-    const p = parsePeriodo(meses[0].nombre);
-    if (p.anio) anioInput.value = p.anio;
-    llenarMesesDelAnio(Number(anioInput.value));
-    if (nombresMeses.includes(p.mes)) mesSelect.value = p.mes;
-    mesActual = meses[0].id;
-  }
+  // Arrancar siempre en el mes y año actuales, no en el último período creado.
+  const mesActualNombre = nombresMeses[hoy.getMonth()];
+  anioInput.value = hoy.getFullYear();
+  llenarMesesDelAnio(Number(anioInput.value));
+  mesSelect.value = mesActualNombre;
 
   await seleccionarPeriodo();
 }
