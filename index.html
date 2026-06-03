@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gastos Pedro y Judith - Online</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body{margin:0;padding:14px;background:#f3f4f6;color:#1f2937;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.app{max-width:950px;margin:0 auto;background:white;border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+h1{margin:0 0 8px;font-size:26px}h2{margin:22px 0 12px;font-size:19px}
+.hint{color:#6b7280;margin:0 0 16px;line-height:1.35}.status{margin:12px 0;padding:10px 12px;border-radius:12px;background:#f3f4f6;font-weight:700}
+.grid{display:grid;gap:12px}.row{display:grid;grid-template-columns:1fr 180px;gap:10px;align-items:center}
+label{font-weight:800}input,select{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
+input[type=number]{text-align:right}input[type=checkbox]{width:22px;height:22px;cursor:pointer}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 8px}
+.tab{background:#e5e7eb;color:#111827}.tab.active{background:#111827;color:white}
+.table-wrap{overflow-x:auto;border:1px solid #e5e7eb;border-radius:14px}
+table{width:100%;border-collapse:collapse;min-width:620px}th,td{padding:10px;border-bottom:1px solid #e5e7eb;text-align:left}
+th{background:#f9fafb;color:#4b5563;font-size:14px;text-transform:uppercase;letter-spacing:.04em}tr:last-child td{border-bottom:0}
+td.amount{width:180px}.check{text-align:center;width:58px}
+.summary{margin-top:20px;display:grid;gap:12px}.cards,.people{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card,.person{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px}.person{background:#f3f4f6;border-radius:16px}
+.person h3{margin:0 0 8px;font-size:21px}.title{color:#6b7280;font-size:14px}.big{font-size:24px;font-weight:900}
+.line{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #e5e7eb}.line:last-child{border-bottom:0}.val{font-weight:900;text-align:right}
+.actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}button{border:0;border-radius:12px;padding:11px 14px;font-weight:900;cursor:pointer;background:#111827;color:white}
+button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:10px 12px;margin-top:12px}
+@media(max-width:700px){body{padding:8px}.app{padding:14px}.row,.cards,.people{grid-template-columns:1fr}input[type=number]{text-align:left}}
+</style>
+</head>
+<body>
+<main class="app">
+<h1>Gastos Pedro y Judith</h1>
+<p class="hint">Esta versión no crea conceptos al abrir. Solo lee y guarda lo que ya está cargado en Supabase.</p>
+<div class="status" id="estado">Cargando...</div>
+<h2>Período</h2>
+<div class="grid">
+  <div class="row"><label for="anioInput">Año</label><input id="anioInput" type="number" min="2020" max="2100" step="1" placeholder="2026"></div>
+  <div class="row"><label for="mesSelect">Mes</label><select id="mesSelect"></select></div>
+  <button onclick="crearPeriodo()">Crear período seleccionado</button>
+</div>
+<h2>Ingresos</h2>
+<section class="grid">
+<div class="row"><label for="sueldoPedro">Sueldo Pedro</label><input id="sueldoPedro" type="number" min="0" step="100" placeholder="0"></div>
+<div class="row"><label for="sueldoJudith">Sueldo Judith</label><input id="sueldoJudith" type="number" min="0" step="100" placeholder="0"></div>
+</section>
+<div class="tabs">
+<button id="tabMartin" class="tab active" onclick="cambiarSolapa('martin')">Martín</button>
+<button id="tabSr" class="tab" onclick="cambiarSolapa('sr')">SR</button>
+</div>
+<h2 id="tituloGastos">Gastos Martín</h2>
+<div id="aviso" class="warn" style="display:none"></div>
+<div class="table-wrap"><table><thead id="thead"></thead><tbody id="tablaGastos"></tbody></table></div>
+<section class="summary">
+<div class="cards">
+<div class="card"><div class="title">Total sueldos</div><div class="big" id="totalSueldos">$0</div></div>
+<div class="card"><div class="title" id="totalTitulo">Total gastos Martín</div><div class="big" id="totalGastos">$0</div></div>
+</div>
+<div class="people">
+<div class="person"><h3>Pedro</h3><div class="line"><span>Porcentaje</span><span class="val" id="porcentajePedro">0%</span></div><div class="line"><span>Aporte proporcional</span><span class="val" id="aportePedro">$0</span></div><div class="line solo-sr"><span>Total tildado P</span><span class="val" id="totalPedro">$0</span></div><div class="line solo-sr"><span>Diferencia</span><span class="val" id="diferenciaPedro">$0</span></div></div>
+<div class="person"><h3>Judith</h3><div class="line"><span>Porcentaje</span><span class="val" id="porcentajeJudith">0%</span></div><div class="line"><span>Aporte proporcional</span><span class="val" id="aporteJudith">$0</span></div><div class="line solo-sr"><span>Total tildado J</span><span class="val" id="totalJudith">$0</span></div><div class="line solo-sr"><span>Diferencia</span><span class="val" id="diferenciaJudith">$0</span></div></div>
+</div>
+</section>
+<div class="actions">
+<button onclick="guardarTodo()">Guardar online</button>
+<button class="secondary" onclick="recargar()">Recargar desde Supabase</button>
+</div>
+</main>
+<script>
+const SUPABASE_URL = "https://zvrahsilwtnhemkhrqmu.supabase.co";
+const SUPABASE_KEY = "sb_publishable_2hREBPOHCy0cibR7jugJiQ_ozP-5ITM";
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const nombresMeses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const conceptosBase = {
+  martin: ["Alquiler","ABL","Luz","Gas","Internet","Expensas","Seguro","Tarjeta NX","Transporte","Efectivo"],
+  sr: ["Tarjeta NX","Tarjeta Patagonia","Tarjeta Cencosud","Tarjeta Mercado Pago","Luz SR","Gas SR","Internet SR","Seguro Jeep","Seguro Chery","Seguro Tornado","Seguro casa","Impuestos casa","Impuestos Toay"]
+};
+let personas = [], meses = [], ingresos = [], gastos = [], mesActual = null, solapaActual = "martin";
+const estado = document.getElementById("estado"), mesSelect = document.getElementById("mesSelect"), anioInput = document.getElementById("anioInput"), tabla = document.getElementById("tablaGastos"), thead = document.getElementById("thead"), aviso = document.getElementById("aviso");
+function money(x) { return new Intl.NumberFormat("es-AR", {style:"currency", currency:"ARS", maximumFractionDigits:0}).format(x || 0); }
+function pct(x) { return new Intl.NumberFormat("es-AR", {maximumFractionDigits:2}).format(x || 0) + "%"; }
+function setEstado(t) { estado.textContent = t; }
+function persona(nombre) { return personas.find(p => p.nombre.toLowerCase() === nombre.toLowerCase()); }
+function ingresoDe(nombre) { const p = persona(nombre); return p ? ingresos.find(i => i.persona_id === p.id) : null; }
+function val(id) { return Number(document.getElementById(id).value) || 0; }
+function nombrePeriodo() {
+  const anio = Number(anioInput.value) || new Date().getFullYear();
+  const mes = mesSelect.value || nombresMeses[new Date().getMonth()];
+  return mes + " " + anio;
+}
+function parsePeriodo(nombre) {
+  const partes = String(nombre || "").trim().split(/\s+/);
+  const anio = Number(partes[partes.length - 1]);
+  const mes = partes.slice(0, -1).join(" ");
+  return { mes, anio };
+}
+function llenarMesesDelAnio(anio) {
+  const actual = mesSelect.value;
+  mesSelect.innerHTML = "";
+  nombresMeses.forEach(nombre => {
+    const op = document.createElement("option");
+    op.value = nombre;
+    op.textContent = nombre;
+    mesSelect.appendChild(op);
+  });
+  if (actual && nombresMeses.includes(actual)) mesSelect.value = actual;
+  else mesSelect.value = nombresMeses[new Date().getMonth()];
+}
+
+async function cargarBase() {
+  setEstado("Cargando datos desde Supabase...");
+
+  const pRes = await db.from("personas").select("*").order("nombre");
+  if (pRes.error) throw pRes.error;
+
+  const mRes = await db.from("meses").select("*").order("creado_en", {ascending:false});
+  if (mRes.error) throw mRes.error;
+
+  personas = pRes.data || [];
+  meses = mRes.data || [];
+
+  const hoy = new Date();
+  anioInput.value = anioInput.value || hoy.getFullYear();
+  llenarMesesDelAnio(Number(anioInput.value));
+
+  // Si ya existe algún mes cargado, intentar mostrar el más reciente.
+  if (!mesActual && meses.length) {
+    const p = parsePeriodo(meses[0].nombre);
+    if (p.anio) anioInput.value = p.anio;
+    llenarMesesDelAnio(Number(anioInput.value));
+    if (nombresMeses.includes(p.mes)) mesSelect.value = p.mes;
+    mesActual = meses[0].id;
+  }
+
+  await seleccionarPeriodo();
+}
+
+async function seleccionarPeriodo() {
+  const nombre = nombrePeriodo();
+  const encontrado = meses.find(m => m.nombre === nombre);
+
+  if (!encontrado) {
+    mesActual = null;
+    gastos = [];
+    ingresos = [];
+    render();
+    setEstado("No existe el período " + nombre + " en Supabase. Crealo desde Supabase o avisame y agregamos botón Crear período.");
+    return;
+  }
+
+  mesActual = encontrado.id;
+  await cargarMes(mesActual);
+}
+
+async function cargarMes(mesId) {
+  if (!mesId) { setEstado("No hay meses cargados."); return; }
+  mesActual = mesId;
+  setEstado("Cargando mes...");
+  const gRes = await db.from("gastos").select("*").eq("mes_id", mesId).order("concepto");
+  if (gRes.error) throw gRes.error;
+  const iRes = await db.from("ingresos").select("*").eq("mes_id", mesId);
+  if (iRes.error) throw iRes.error;
+  gastos = gRes.data || [];
+  ingresos = iRes.data || [];
+  render();
+  setEstado("Datos cargados.");
+}
+
+function cambiarSolapa(s) {
+  solapaActual = s;
+  document.getElementById("tabMartin").classList.toggle("active", s === "martin");
+  document.getElementById("tabSr").classList.toggle("active", s === "sr");
+  render();
+}
+
+function render() {
+  const ip = ingresoDe("Pedro"), ij = ingresoDe("Judith");
+  document.getElementById("sueldoPedro").value = ip ? ip.monto : "";
+  document.getElementById("sueldoJudith").value = ij ? ij.monto : "";
+  const gastosSolapa = gastos.filter(g => g.solapa === solapaActual);
+  document.getElementById("tituloGastos").textContent = solapaActual === "martin" ? "Gastos Martín" : "Gastos SR";
+  document.getElementById("totalTitulo").textContent = solapaActual === "martin" ? "Total gastos Martín" : "Total gastos SR";
+  aviso.style.display = gastosSolapa.length === 0 ? "block" : "none";
+  aviso.textContent = "Esta solapa no tiene gastos cargados en Supabase. Revisá la columna solapa en la tabla gastos.";
+  thead.innerHTML = solapaActual === "martin"
+    ? "<tr><th>Concepto</th><th>Importe</th></tr>"
+    : "<tr><th>Concepto</th><th>Importe</th><th class='check'>J</th><th class='check'>P</th></tr>";
+  tabla.innerHTML = "";
+  gastosSolapa.forEach(g => {
+    const tr = document.createElement("tr");
+    if (solapaActual === "martin") {
+      tr.innerHTML = "<td><b>" + g.concepto + "</b></td><td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td>";
+    } else {
+      tr.innerHTML = "<td><b>" + g.concepto + "</b></td><td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td><td class='check'><input data-j-id='" + g.id + "' type='checkbox' " + (g.asignado_j ? "checked" : "") + "></td><td class='check'><input data-p-id='" + g.id + "' type='checkbox' " + (g.asignado_p ? "checked" : "") + "></td>";
+    }
+    tabla.appendChild(tr);
+  });
+  document.querySelectorAll(".solo-sr").forEach(el => { el.style.display = solapaActual === "sr" ? "flex" : "none"; });
+  calcular();
+}
+
+function calcular() {
+  const sp = val("sueldoPedro"), sj = val("sueldoJudith"), totalSueldos = sp + sj;
+  const pp = totalSueldos > 0 ? sp / totalSueldos : 0, pj = totalSueldos > 0 ? sj / totalSueldos : 0;
+  let total = 0, totalP = 0, totalJ = 0;
+  document.querySelectorAll("[data-gasto-id]").forEach(input => {
+    const monto = Number(input.value) || 0;
+    total += monto;
+    const id = input.dataset.gastoId;
+    const cj = document.querySelector("[data-j-id='" + id + "']");
+    const cp = document.querySelector("[data-p-id='" + id + "']");
+    if (cj && cj.checked) totalJ += monto;
+    if (cp && cp.checked) totalP += monto;
+  });
+  const aporteP = total * pp, aporteJ = total * pj;
+  document.getElementById("totalSueldos").textContent = money(totalSueldos);
+  document.getElementById("totalGastos").textContent = money(total);
+  document.getElementById("porcentajePedro").textContent = pct(pp * 100);
+  document.getElementById("porcentajeJudith").textContent = pct(pj * 100);
+  document.getElementById("aportePedro").textContent = money(aporteP);
+  document.getElementById("aporteJudith").textContent = money(aporteJ);
+  document.getElementById("totalPedro").textContent = money(totalP);
+  document.getElementById("totalJudith").textContent = money(totalJ);
+  document.getElementById("diferenciaPedro").textContent = money(totalP - aporteP);
+  document.getElementById("diferenciaJudith").textContent = money(totalJ - aporteJ);
+}
+
+async function upsertIngreso(nombre, monto) {
+  const p = persona(nombre);
+  if (!p) throw new Error("No existe persona: " + nombre);
+  const existente = ingresos.find(i => i.persona_id === p.id);
+  if (existente) {
+    const res = await db.from("ingresos").update({monto:monto}).eq("id", existente.id);
+    if (res.error) throw res.error;
+  } else {
+    const res = await db.from("ingresos").insert({mes_id:mesActual, persona_id:p.id, monto:monto});
+    if (res.error) throw res.error;
+  }
+}
+
+async function guardarTodo() {
+  try {
+    setEstado("Guardando online...");
+    await upsertIngreso("Pedro", val("sueldoPedro"));
+    await upsertIngreso("Judith", val("sueldoJudith"));
+    const inputs = Array.from(document.querySelectorAll("[data-gasto-id]"));
+    for (const input of inputs) {
+      const id = input.dataset.gastoId;
+      const cj = document.querySelector("[data-j-id='" + id + "']");
+      const cp = document.querySelector("[data-p-id='" + id + "']");
+      const payload = {monto: Number(input.value) || 0};
+      if (solapaActual === "sr") {
+        payload.asignado_j = !!(cj && cj.checked);
+        payload.asignado_p = !!(cp && cp.checked);
+      }
+      const res = await db.from("gastos").update(payload).eq("id", id);
+      if (res.error) throw res.error;
+    }
+    await cargarMes(mesActual);
+    setEstado("Guardado online correctamente.");
+  } catch (err) {
+    console.error(err);
+    setEstado("Error al guardar: " + err.message);
+  }
+}
+
+async function crearPeriodo() {
+  try {
+    const nombre = nombrePeriodo();
+    const existe = meses.find(m => m.nombre === nombre);
+    if (existe) {
+      mesActual = existe.id;
+      await cargarMes(mesActual);
+      setEstado("El período ya existía. Datos cargados.");
+      return;
+    }
+
+    if (!confirm("¿Crear " + nombre + " en Supabase?")) return;
+
+    setEstado("Creando período " + nombre + "...");
+
+    const mRes = await db.from("meses").insert({nombre:nombre}).select().single();
+    if (mRes.error) throw mRes.error;
+
+    const nuevoMes = mRes.data;
+    const filas = [];
+
+    conceptosBase.martin.forEach(c => {
+      filas.push({mes_id:nuevoMes.id, concepto:c, monto:0, solapa:"martin", asignado_j:false, asignado_p:false});
+    });
+
+    conceptosBase.sr.forEach(c => {
+      filas.push({mes_id:nuevoMes.id, concepto:c, monto:0, solapa:"sr", asignado_j:false, asignado_p:false});
+    });
+
+    const gRes = await db.from("gastos").insert(filas);
+    if (gRes.error) throw gRes.error;
+
+    meses.unshift(nuevoMes);
+    mesActual = nuevoMes.id;
+    await cargarMes(mesActual);
+    setEstado("Período creado correctamente.");
+  } catch (err) {
+    console.error(err);
+    setEstado("Error al crear período: " + err.message);
+  }
+}
+
+async function recargar() {
+  try { await cargarMes(mesActual); }
+  catch (err) { console.error(err); setEstado("Error al recargar: " + err.message); }
+}
+
+mesSelect.addEventListener("change", seleccionarPeriodo);
+anioInput.addEventListener("change", seleccionarPeriodo);
+document.addEventListener("input", calcular);
+document.addEventListener("change", calcular);
+cargarBase().catch(err => { console.error(err); setEstado("Error al cargar: " + err.message); });
+</script>
+</body>
+</html>
