@@ -61,6 +61,23 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 <div class="person"><h3>Judith</h3><div class="line"><span>Porcentaje</span><span class="val" id="porcentajeJudith">0%</span></div><div class="line"><span>Aporte proporcional</span><span class="val" id="aporteJudith">$0</span></div><div class="line solo-sr"><span>Total tildado J</span><span class="val" id="totalJudith">$0</span></div><div class="line solo-sr"><span>Diferencia</span><span class="val" id="diferenciaJudith">$0</span></div></div>
 </div>
 </section>
+<section class="dashboard">
+<h2>Dashboard por categorías</h2>
+<p class="hint">Resumen del período seleccionado, sumando Martín y SR.</p>
+<div class="dash-grid">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Categoría</th><th>Monto</th><th>%</th></tr></thead>
+      <tbody id="tablaCategorias"><tr><td colspan="3">Cargando...</td></tr></tbody>
+    </table>
+  </div>
+  <div class="pie-wrap">
+    <canvas id="pieCategorias" width="320" height="320"></canvas>
+  </div>
+</div>
+<div class="detalle-cat" id="detalleCategoria">Tocá una categoría para ver el detalle.</div>
+</section>
+
 <section class="historial">
 <h2>Historial anual</h2>
 <p class="hint">Muestra los totales guardados en Supabase para el año seleccionado.</p>
@@ -208,6 +225,7 @@ function render() {
   });
   document.querySelectorAll(".solo-sr").forEach(el => { el.style.display = solapaActual === "sr" ? "flex" : "none"; });
   calcular();
+  renderCategorias();
 }
 
 function calcular() {
@@ -315,6 +333,135 @@ async function crearPeriodo() {
     console.error(err);
     setEstado("Error al crear período: " + err.message);
   }
+}
+
+function colorCategoria(index) {
+  const colores = ["#2563eb","#16a34a","#f97316","#dc2626","#7c3aed","#0891b2","#ca8a04","#be123c","#4b5563"];
+  return colores[index % colores.length];
+}
+
+function resumenCategorias() {
+  const porCategoria = {};
+  const detalle = {};
+  gastos.forEach(g => {
+    const categoria = g.categoria || "Sin categoría";
+    const monto = Number(g.monto) || 0;
+    if (!porCategoria[categoria]) porCategoria[categoria] = 0;
+    if (!detalle[categoria]) detalle[categoria] = [];
+    porCategoria[categoria] += monto;
+    detalle[categoria].push(g);
+  });
+
+  return {
+    filas: Object.entries(porCategoria)
+      .map(([categoria, monto]) => ({categoria, monto}))
+      .filter(x => x.monto > 0)
+      .sort((a,b) => b.monto - a.monto),
+    detalle
+  };
+}
+
+function renderCategorias() {
+  const tbody = document.getElementById("tablaCategorias");
+  const canvas = document.getElementById("pieCategorias");
+  const detalleBox = document.getElementById("detalleCategoria");
+  if (!tbody || !canvas) return;
+
+  const data = resumenCategorias();
+  const filas = data.filas;
+  const total = filas.reduce((s, f) => s + f.monto, 0);
+
+  tbody.innerHTML = "";
+
+  if (!filas.length || total <= 0) {
+    tbody.innerHTML = "<tr><td colspan='3'>No hay importes cargados para graficar.</td></tr>";
+    dibujarPastel([]);
+    detalleBox.textContent = "Cargá importes para ver el resumen.";
+    return;
+  }
+
+  filas.forEach((f, index) => {
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.onclick = () => mostrarDetalleCategoria(f.categoria, data.detalle[f.categoria] || []);
+    tr.innerHTML =
+      "<td><b><span style='display:inline-block;width:12px;height:12px;border-radius:50%;background:" + colorCategoria(index) + ";margin-right:6px'></span>" + f.categoria + "</b></td>" +
+      "<td>" + money(f.monto) + "</td>" +
+      "<td>" + pct((f.monto / total) * 100) + "</td>";
+    tbody.appendChild(tr);
+  });
+
+  const trTotal = document.createElement("tr");
+  trTotal.innerHTML = "<td><b>Total</b></td><td><b>" + money(total) + "</b></td><td><b>100%</b></td>";
+  tbody.appendChild(trTotal);
+
+  dibujarPastel(filas);
+}
+
+function dibujarPastel(filas) {
+  const canvas = document.getElementById("pieCategorias");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+  const cx = w / 2;
+  const cy = h / 2;
+  const radio = Math.min(w, h) * 0.38;
+
+  ctx.clearRect(0, 0, w, h);
+
+  const total = filas.reduce((s, f) => s + f.monto, 0);
+  if (!filas.length || total <= 0) {
+    ctx.fillStyle = "#6b7280";
+    ctx.font = "16px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText("Sin datos", cx, cy);
+    return;
+  }
+
+  let inicio = -Math.PI / 2;
+  filas.forEach((f, index) => {
+    const angulo = (f.monto / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radio, inicio, inicio + angulo);
+    ctx.closePath();
+    ctx.fillStyle = colorCategoria(index);
+    ctx.fill();
+    inicio += angulo;
+  });
+
+  // Centro blanco tipo dona
+  ctx.beginPath();
+  ctx.arc(cx, cy, radio * 0.55, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  ctx.fillStyle = "#111827";
+  ctx.font = "800 16px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("TOTAL", cx, cy - 8);
+  ctx.font = "800 20px system-ui";
+  ctx.fillText(money(total), cx, cy + 18);
+}
+
+function mostrarDetalleCategoria(categoria, items) {
+  const detalleBox = document.getElementById("detalleCategoria");
+  const validos = items.filter(g => (Number(g.monto) || 0) > 0).sort((a,b) => (Number(b.monto)||0) - (Number(a.monto)||0));
+
+  if (!validos.length) {
+    detalleBox.innerHTML = "<b>" + categoria + "</b><br>No hay importes cargados.";
+    return;
+  }
+
+  const total = validos.reduce((s,g) => s + (Number(g.monto)||0), 0);
+  let html = "<b>" + categoria + " — " + money(total) + "</b><br><br>";
+  html += "<table style='width:100%;border-collapse:collapse'>";
+  validos.forEach(g => {
+    html += "<tr><td style='padding:4px 0'>" + g.concepto + " <small>(" + g.solapa.toUpperCase() + ")</small></td><td style='text-align:right;font-weight:800'>" + money(Number(g.monto)||0) + "</td></tr>";
+  });
+  html += "</table>";
+  detalleBox.innerHTML = html;
 }
 
 async function cargarHistorial() {
