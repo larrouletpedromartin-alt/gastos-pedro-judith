@@ -151,18 +151,15 @@ async function cargarBase() {
   meses = mRes.data || [];
 
   const hoy = new Date();
-  anioInput.value = anioInput.value || hoy.getFullYear();
-  llenarMesesDelAnio(Number(anioInput.value));
-
-  // Arrancar siempre en el mes y año actuales, no en el último período creado.
+  const anioActual = hoy.getFullYear();
   const mesActualNombre = nombresMeses[hoy.getMonth()];
-  anioInput.value = hoy.getFullYear();
-  llenarMesesDelAnio(Number(anioInput.value));
+
+  anioInput.value = anioActual;
+  llenarMesesDelAnio(anioActual);
   mesSelect.value = mesActualNombre;
 
   await seleccionarPeriodo();
 }
-
 async function seleccionarPeriodo() {
   const nombre = nombrePeriodo();
   const encontrado = meses.find(m => m.nombre === nombre);
