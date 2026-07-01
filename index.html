@@ -95,7 +95,7 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 </section>
 
 <div class="actions">
-<button onclick="guardarTodo()">Guardar online</button>
+<button id="btnGuardar" onclick="guardarTodo()">Guardar online</button>
 <button class="secondary" onclick="recargar()">Recargar desde Supabase</button>
 </div>
 </main>
@@ -289,28 +289,52 @@ async function upsertIngreso(nombre, monto) {
 }
 
 async function guardarTodo() {
+  const btn = document.getElementById("btnGuardar");
+
   try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Guardando...";
+    }
+
     setEstado("Guardando online...");
+
     await upsertIngreso("Pedro", val("sueldoPedro"));
     await upsertIngreso("Judith", val("sueldoJudith"));
+
     const inputs = Array.from(document.querySelectorAll("[data-gasto-id]"));
+
     for (const input of inputs) {
       const id = input.dataset.gastoId;
       const cj = document.querySelector("[data-j-id='" + id + "']");
       const cp = document.querySelector("[data-p-id='" + id + "']");
-      const payload = {monto: Number(input.value) || 0};
-      if (solapaActual === "sr") {
-        payload.asignado_j = !!(cj && cj.checked);
-        payload.asignado_p = !!(cp && cp.checked);
-      }
-      const res = await db.from("gastos").update(payload).eq("id", id);
+
+      const payload = {
+        monto: Number(input.value) || 0
+      };
+
+      if (cj) payload.asignado_j = !!cj.checked;
+      if (cp) payload.asignado_p = !!cp.checked;
+
+      const res = await db
+        .from("gastos")
+        .update(payload)
+        .eq("id", id);
+
       if (res.error) throw res.error;
     }
+
     await cargarMes(mesActual);
+
     setEstado("Guardado online correctamente.");
   } catch (err) {
     console.error(err);
     setEstado("Error al guardar: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Guardar online";
+    }
   }
 }
 
