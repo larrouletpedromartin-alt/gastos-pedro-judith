@@ -39,6 +39,14 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 .floating-actions button{
   box-shadow:0 8px 20px rgba(0,0,0,.25);
 }
+  button:disabled{
+  cursor:not-allowed;
+  transform:scale(.98);
+}
+
+.btnGuardar{
+  transition:all .15s ease;
+}
 </style>
 </head>
 <body>
@@ -308,15 +316,14 @@ async function upsertIngreso(nombre, monto) {
 async function guardarTodo() {
   const botones = document.querySelectorAll(".btnGuardar");
 
-  try {
-    if (btn) {
-      botones.forEach(btn => {
-  btn.disabled = true;
-  btn.dataset.textoOriginal = btn.textContent;
-  btn.textContent = "Guardando...";
-});
-    }
+  botones.forEach(btn => {
+    btn.disabled = true;
+    btn.dataset.textoOriginal = btn.textContent;
+    btn.textContent = "Guardando...";
+    btn.style.opacity = "0.65";
+  });
 
+  try {
     setEstado("Guardando online...");
 
     await upsertIngreso("Pedro", val("sueldoPedro"));
@@ -345,18 +352,36 @@ async function guardarTodo() {
     }
 
     await cargarMes(mesActual);
+    await cargarHistorial();
 
-    setEstado("Guardado online correctamente.");
+    setEstado("✅ Guardado online correctamente.");
+
+    botones.forEach(btn => {
+      btn.textContent = "✅ Guardado";
+    });
+
+    setTimeout(() => {
+      botones.forEach(btn => {
+        btn.textContent = btn.dataset.textoOriginal || "Guardar online";
+      });
+    }, 1200);
+
   } catch (err) {
     console.error(err);
-    setEstado("Error al guardar: " + err.message);
+    setEstado("❌ Error al guardar: " + err.message);
+
+    botones.forEach(btn => {
+      btn.textContent = "❌ Error";
+    });
+
   } finally {
-    if (btn) {
+    setTimeout(() => {
       botones.forEach(btn => {
-  btn.disabled = false;
-  btn.textContent = btn.dataset.textoOriginal || "Guardar online";
-});
-    }
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.textContent = btn.dataset.textoOriginal || "Guardar online";
+      });
+    }, 1300);
   }
 }
 
