@@ -108,11 +108,11 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 </section>
 
 <div class="actions">
-<button id="btnGuardar" onclick="guardarTodo()">Guardar online</button>
+<button class="btnGuardar" onclick="guardarTodo()">Guardar online</button>
 <button class="secondary" onclick="recargar()">Recargar desde Supabase</button>
 </div>
  <div class="floating-actions">
-  <button id="btnGuardar" onclick="guardarTodo()">Guardar online</button>
+  <button class="btnGuardar" onclick="guardarTodo()">💾 Guardar</button>
   <button class="secondary" onclick="recargar()">Recargar</button>
 </div> 
 </main>
@@ -306,12 +306,15 @@ async function upsertIngreso(nombre, monto) {
 }
 
 async function guardarTodo() {
-  const btn = document.getElementById("btnGuardar");
+  const botones = document.querySelectorAll(".btnGuardar");
 
   try {
     if (btn) {
-      btn.disabled = true;
-      btn.textContent = "Guardando...";
+      botones.forEach(btn => {
+  btn.disabled = true;
+  btn.dataset.textoOriginal = btn.textContent;
+  btn.textContent = "Guardando...";
+});
     }
 
     setEstado("Guardando online...");
@@ -349,8 +352,10 @@ async function guardarTodo() {
     setEstado("Error al guardar: " + err.message);
   } finally {
     if (btn) {
-      btn.disabled = false;
-      btn.textContent = "Guardar online";
+      botones.forEach(btn => {
+  btn.disabled = false;
+  btn.textContent = btn.dataset.textoOriginal || "Guardar online";
+});
     }
   }
 }
