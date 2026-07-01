@@ -39,6 +39,8 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
   <div class="row"><label for="mesSelect">Mes</label><select id="mesSelect"></select></div>
   <button onclick="crearPeriodo()">Crear período seleccionado</button>
 </div>
+  <h2>Períodos cargados</h2>
+<div class="tabs" id="periodosCargados"></div>
 <h2>Ingresos</h2>
 <section class="grid">
 <div class="row"><label for="sueldoPedro">Sueldo Pedro</label><input id="sueldoPedro" type="number" min="0" step="100" placeholder="0"></div>
@@ -114,6 +116,28 @@ function setEstado(t) { estado.textContent = t; }
 function persona(nombre) { return personas.find(p => p.nombre.toLowerCase() === nombre.toLowerCase()); }
 function ingresoDe(nombre) { const p = persona(nombre); return p ? ingresos.find(i => i.persona_id === p.id) : null; }
 function val(id) { return Number(document.getElementById(id).value) || 0; }
+  function renderPeriodosCargados() {
+  const cont = document.getElementById("periodosCargados");
+  if (!cont) return;
+
+  cont.innerHTML = "";
+
+  meses.forEach(m => {
+    const btn = document.createElement("button");
+    btn.className = "tab";
+    btn.textContent = m.nombre;
+
+    btn.onclick = async () => {
+      const p = parsePeriodo(m.nombre);
+      anioInput.value = p.anio;
+      llenarMesesDelAnio(p.anio);
+      mesSelect.value = p.mes;
+      await seleccionarPeriodo();
+    };
+
+    cont.appendChild(btn);
+  });
+}
 function nombrePeriodo() {
   const anio = Number(anioInput.value) || new Date().getFullYear();
   const mes = mesSelect.value || nombresMeses[new Date().getMonth()];
@@ -140,16 +164,16 @@ function llenarMesesDelAnio(anio) {
 
 async function cargarBase() {
   setEstado("Cargando datos desde Supabase...");
-
+  
   const pRes = await db.from("personas").select("*").order("nombre");
   if (pRes.error) throw pRes.error;
 
   const mRes = await db.from("meses").select("*").order("creado_en", {ascending:false});
   if (mRes.error) throw mRes.error;
-
+  
   personas = pRes.data || [];
   meses = mRes.data || [];
-
+  renderPeriodosCargados();
   const hoy = new Date();
   const anioActual = hoy.getFullYear();
   const mesActualNombre = nombresMeses[hoy.getMonth()];
