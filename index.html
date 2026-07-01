@@ -26,6 +26,19 @@ td.amount{width:180px}.check{text-align:center;width:58px}
 .actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}button{border:0;border-radius:12px;padding:11px 14px;font-weight:900;cursor:pointer;background:#111827;color:white}
 button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:12px;padding:10px 12px;margin-top:12px}
 @media(max-width:700px){body{padding:8px}.app{padding:14px}.row,.cards,.people{grid-template-columns:1fr}input[type=number]{text-align:left}}
+  .floating-actions{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  z-index:999;
+}
+
+.floating-actions button{
+  box-shadow:0 8px 20px rgba(0,0,0,.25);
+}
 </style>
 </head>
 <body>
@@ -98,6 +111,10 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 <button id="btnGuardar" onclick="guardarTodo()">Guardar online</button>
 <button class="secondary" onclick="recargar()">Recargar desde Supabase</button>
 </div>
+ <div class="floating-actions">
+  <button id="btnGuardar" onclick="guardarTodo()">Guardar online</button>
+  <button class="secondary" onclick="recargar()">Recargar</button>
+</div> 
 </main>
 <script>
 const SUPABASE_URL = "https://zvrahsilwtnhemkhrqmu.supabase.co";
