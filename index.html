@@ -73,6 +73,7 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 </div>
 <h2 id="tituloGastos">Gastos Martín</h2>
 <div id="aviso" class="warn" style="display:none"></div>
+<div style="margin-bottom:10px"><button onclick="agregarGasto()">➕ Agregar gasto</button></div>
 <div class="table-wrap"><table><thead id="thead"></thead><tbody id="tablaGastos"></tbody></table></div>
 <section class="summary">
 <div class="cards">
@@ -129,10 +130,6 @@ const SUPABASE_URL = "https://zvrahsilwtnhemkhrqmu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_2hREBPOHCy0cibR7jugJiQ_ozP-5ITM";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const nombresMeses = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-const conceptosBase = {
-  martin: ["Alquiler","ABL","Luz","Gas","Internet","Expensas","Seguro","Tarjeta NX","Transporte","Efectivo"],
-  sr: ["Tarjeta NX","Tarjeta Patagonia","Tarjeta Cencosud","Tarjeta Mercado Pago","Luz SR","Gas SR","Internet SR","Seguro Jeep","Seguro Chery","Seguro Tornado","Seguro casa","Impuestos casa","Impuestos Toay"]
-};
 let personas = [], meses = [], ingresos = [], gastos = [], mesActual = null, solapaActual = "martin";
 const estado = document.getElementById("estado"), mesSelect = document.getElementById("mesSelect"), anioInput = document.getElementById("anioInput"), tabla = document.getElementById("tablaGastos"), thead = document.getElementById("thead"), aviso = document.getElementById("aviso");
 function money(x) { return new Intl.NumberFormat("es-AR", {style:"currency", currency:"ARS", maximumFractionDigits:0}).format(x || 0); }
@@ -257,15 +254,24 @@ function render() {
   aviso.style.display = gastosSolapa.length === 0 ? "block" : "none";
   aviso.textContent = "Esta solapa no tiene gastos cargados en Supabase. Revisá la columna solapa en la tabla gastos.";
   thead.innerHTML = solapaActual === "martin"
-    ? "<tr><th>Concepto</th><th>Importe</th></tr>"
-    : "<tr><th>Concepto</th><th>Importe</th><th class='check'>J</th><th class='check'>P</th></tr>";
+    ? "<tr><th>Concepto</th><th>Importe</th><th></th></tr>"
+    : "<tr><th>Concepto</th><th>Importe</th><th class='check'>J</th><th class='check'>P</th><th></th></tr>";
   tabla.innerHTML = "";
   gastosSolapa.forEach(g => {
     const tr = document.createElement("tr");
+    const conceptoSeguro = String(g.concepto || "").replace(/'/g, "\\'");
     if (solapaActual === "martin") {
-      tr.innerHTML = "<td><b>" + g.concepto + "</b></td><td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td>";
+      tr.innerHTML =
+        "<td><b>" + g.concepto + "</b></td>" +
+        "<td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td>" +
+        "<td><button class='secondary' onclick=\"eliminarGasto('" + g.id + "','" + conceptoSeguro + "')\">🗑️</button></td>";
     } else {
-      tr.innerHTML = "<td><b>" + g.concepto + "</b></td><td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td><td class='check'><input data-j-id='" + g.id + "' type='checkbox' " + (g.asignado_j ? "checked" : "") + "></td><td class='check'><input data-p-id='" + g.id + "' type='checkbox' " + (g.asignado_p ? "checked" : "") + "></td>";
+      tr.innerHTML =
+        "<td><b>" + g.concepto + "</b></td>" +
+        "<td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td>" +
+        "<td class='check'><input data-j-id='" + g.id + "' type='checkbox' " + (g.asignado_j ? "checked" : "") + "></td>" +
+        "<td class='check'><input data-p-id='" + g.id + "' type='checkbox' " + (g.asignado_p ? "checked" : "") + "></td>" +
+        "<td><button class='secondary' onclick=\"eliminarGasto('" + g.id + "','" + conceptoSeguro + "')\">🗑️</button></td>";
     }
     tabla.appendChild(tr);
   });
@@ -406,12 +412,22 @@ async function crearPeriodo() {
     const nuevoMes = mRes.data;
     const filas = [];
 
-    conceptosBase.martin.forEach(c => {
-      filas.push({mes_id:nuevoMes.id, concepto:c, monto:0, solapa:"martin", asignado_j:false, asignado_p:false});
-    });
+    const cRes = await db
+      .from("conceptos_gastos")
+      .select("*")
+      .order("id");
 
-    conceptosBase.sr.forEach(c => {
-      filas.push({mes_id:nuevoMes.id, concepto:c, monto:0, solapa:"sr", asignado_j:false, asignado_p:false});
+    if (cRes.error) throw cRes.error;
+
+    (cRes.data || []).forEach(c => {
+      filas.push({
+        mes_id: nuevoMes.id,
+        concepto: c.concepto,
+        monto: 0,
+        solapa: c.solapa,
+        asignado_j: false,
+        asignado_p: false
+      });
     });
 
     const gRes = await db.from("gastos").insert(filas);
@@ -621,6 +637,100 @@ async function cargarHistorial() {
   } catch (err) {
     console.error(err);
     setEstado("Error al cargar historial: " + err.message);
+  }
+}
+
+
+async function agregarGasto() {
+  if (!mesActual) {
+    alert("Primero seleccioná o creá un período.");
+    return;
+  }
+
+  const concepto = prompt("Nombre del nuevo gasto:");
+  if (!concepto || !concepto.trim()) return;
+
+  const nombre = concepto.trim();
+
+  const repetido = gastos.some(g =>
+    g.solapa === solapaActual &&
+    String(g.concepto || "").toLowerCase() === nombre.toLowerCase()
+  );
+
+  if (repetido) {
+    alert("Ese gasto ya existe en esta solapa.");
+    return;
+  }
+
+  try {
+    setEstado("Agregando gasto...");
+
+    const plantilla = await db
+      .from("conceptos_gastos")
+      .insert({
+        concepto: nombre,
+        solapa: solapaActual
+      });
+
+    if (plantilla.error) throw plantilla.error;
+
+    const actual = await db
+      .from("gastos")
+      .insert({
+        mes_id: mesActual,
+        concepto: nombre,
+        monto: 0,
+        solapa: solapaActual,
+        asignado_j: false,
+        asignado_p: false
+      });
+
+    if (actual.error) {
+      await db
+        .from("conceptos_gastos")
+        .delete()
+        .eq("concepto", nombre)
+        .eq("solapa", solapaActual);
+
+      throw actual.error;
+    }
+
+    await cargarMes(mesActual);
+    setEstado("✅ Gasto agregado y guardado para meses futuros.");
+  } catch (err) {
+    console.error(err);
+    setEstado("❌ Error al agregar gasto: " + err.message);
+  }
+}
+
+async function eliminarGasto(id, concepto) {
+  if (!confirm(
+    '¿Eliminar "' + concepto + '" de este período?\n\nTambién dejará de aparecer en los próximos meses.'
+  )) return;
+
+  try {
+    setEstado("Eliminando gasto...");
+
+    const actual = await db
+      .from("gastos")
+      .delete()
+      .eq("id", id);
+
+    if (actual.error) throw actual.error;
+
+    const plantilla = await db
+      .from("conceptos_gastos")
+      .delete()
+      .eq("concepto", concepto)
+      .eq("solapa", solapaActual);
+
+    if (plantilla.error) throw plantilla.error;
+
+    await cargarMes(mesActual);
+    setEstado("✅ Eliminado. Los meses anteriores no fueron modificados.");
+  } catch (err) {
+    console.error(err);
+    setEstado("❌ Error al eliminar gasto: " + err.message);
   }
 }
 
