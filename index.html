@@ -395,6 +395,7 @@ async function crearPeriodo() {
   try {
     const nombre = nombrePeriodo();
     const existe = meses.find(m => m.nombre === nombre);
+
     if (existe) {
       mesActual = existe.id;
       await cargarMes(mesActual);
@@ -406,40 +407,97 @@ async function crearPeriodo() {
 
     setEstado("Creando período " + nombre + "...");
 
-    const mRes = await db.from("meses").insert({nombre:nombre}).select().single();
-    if (mRes.error) throw mRes.error;
-
-    const nuevoMes = mRes.data;
-    const filas = [];
-
-    const cRes = await db
+    // 1. Buscar plantilla
+    let cRes = await db
       .from("conceptos_gastos")
       .select("*")
       .order("id");
 
     if (cRes.error) throw cRes.error;
 
-    (cRes.data || []).forEach(c => {
-      filas.push({
-        mes_id: nuevoMes.id,
-        concepto: c.concepto,
-        monto: 0,
-        solapa: c.solapa,
-        asignado_j: false,
-        asignado_p: false
-      });
-    });
+    let conceptos = cRes.data || [];
 
-    const gRes = await db.from("gastos").insert(filas);
-    if (gRes.error) throw gRes.error;
+    // 2. Si conceptos_gastos está vacío,
+    // tomar los conceptos del último mes existente
+    if (conceptos.length === 0 && meses.length > 0) {
+
+      const ultimoMes = meses[0];
+
+      const gAnterior = await db
+        .from("gastos")
+        .select("concepto, solapa")
+        .eq("mes_id", ultimoMes.id);
+
+      if (gAnterior.error) throw gAnterior.error;
+
+      conceptos = gAnterior.data || [];
+
+      // quitar duplicados
+      conceptos = conceptos.filter((item, index, self) =>
+        index === self.findIndex(x =>
+          x.concepto === item.concepto &&
+          x.solapa === item.solapa
+        )
+      );
+
+      // guardar plantilla para meses futuros
+      if (conceptos.length > 0) {
+        const guardarPlantilla = await db
+          .from("conceptos_gastos")
+          .insert(
+            conceptos.map(c => ({
+              concepto: c.concepto,
+              solapa: c.solapa
+            }))
+          );
+
+        if (guardarPlantilla.error) throw guardarPlantilla.error;
+      }
+    }
+
+    // 3. Crear el nuevo mes
+    const mRes = await db
+      .from("meses")
+      .insert({ nombre: nombre })
+      .select()
+      .single();
+
+    if (mRes.error) throw mRes.error;
+
+    const nuevoMes = mRes.data;
+
+    // 4. Crear todos los gastos del nuevo mes en cero
+    const filas = conceptos.map(c => ({
+      mes_id: nuevoMes.id,
+      concepto: c.concepto,
+      monto: 0,
+      solapa: c.solapa,
+      asignado_j: false,
+      asignado_p: false
+    }));
+
+    if (filas.length > 0) {
+      const gRes = await db
+        .from("gastos")
+        .insert(filas);
+
+      if (gRes.error) throw gRes.error;
+    }
 
     meses.unshift(nuevoMes);
     mesActual = nuevoMes.id;
+
     await cargarMes(mesActual);
-    setEstado("Período creado correctamente.");
+
+    setEstado(
+      "✅ Período creado con " +
+      filas.length +
+      " gastos."
+    );
+
   } catch (err) {
     console.error(err);
-    setEstado("Error al crear período: " + err.message);
+    setEstado("❌ Error al crear período: " + err.message);
   }
 }
 
