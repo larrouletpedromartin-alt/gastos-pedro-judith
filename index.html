@@ -73,7 +73,10 @@ button.secondary{background:#e5e7eb;color:#111827}.warn{background:#fff7ed;borde
 </div>
 <h2 id="tituloGastos">Gastos Martín</h2>
 <div id="aviso" class="warn" style="display:none"></div>
-<div style="margin-bottom:10px"><button onclick="agregarGasto()">➕ Agregar gasto</button></div>
+<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">
+  <button onclick="agregarGasto()">➕ Agregar gasto</button>
+  <button class="secondary" onclick="traerTodosMesAnterior()">↩️ Traer todos del mes anterior</button>
+</div>
 <div class="table-wrap"><table><thead id="thead"></thead><tbody id="tablaGastos"></tbody></table></div>
 <section class="summary">
 <div class="cards">
@@ -264,14 +267,20 @@ function render() {
       tr.innerHTML =
         "<td><b>" + g.concepto + "</b></td>" +
         "<td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td>" +
-        "<td><button class='secondary' onclick=\"eliminarGasto('" + g.id + "','" + conceptoSeguro + "')\">🗑️</button></td>";
+        "<td style='white-space:nowrap'>" +
+          "<button class='secondary' title='Traer monto del mes anterior' onclick=\"traerMesAnterior('" + g.id + "')\">↩️</button> " +
+          "<button class='secondary' onclick=\"eliminarGasto('" + g.id + "','" + conceptoSeguro + "')\">🗑️</button>" +
+        "</td>";
     } else {
       tr.innerHTML =
         "<td><b>" + g.concepto + "</b></td>" +
         "<td class='amount'><input data-gasto-id='" + g.id + "' type='number' min='0' step='100' value='" + (g.monto || "") + "' placeholder='0'></td>" +
         "<td class='check'><input data-j-id='" + g.id + "' type='checkbox' " + (g.asignado_j ? "checked" : "") + "></td>" +
         "<td class='check'><input data-p-id='" + g.id + "' type='checkbox' " + (g.asignado_p ? "checked" : "") + "></td>" +
-        "<td><button class='secondary' onclick=\"eliminarGasto('" + g.id + "','" + conceptoSeguro + "')\">🗑️</button></td>";
+        "<td style='white-space:nowrap'>" +
+          "<button class='secondary' title='Traer monto del mes anterior' onclick=\"traerMesAnterior('" + g.id + "')\">↩️</button> " +
+          "<button class='secondary' onclick=\"eliminarGasto('" + g.id + "','" + conceptoSeguro + "')\">🗑️</button>" +
+        "</td>";
     }
     tabla.appendChild(tr);
   });
@@ -789,6 +798,158 @@ async function eliminarGasto(id, concepto) {
   } catch (err) {
     console.error(err);
     setEstado("❌ Error al eliminar gasto: " + err.message);
+  }
+}
+
+
+function obtenerPeriodoAnterior() {
+  const anio = Number(anioInput.value);
+  const mesNombre = mesSelect.value;
+  const indice = nombresMeses.indexOf(mesNombre);
+
+  if (indice === -1) return null;
+
+  let anioAnterior = anio;
+  let indiceAnterior = indice - 1;
+
+  if (indiceAnterior < 0) {
+    indiceAnterior = 11;
+    anioAnterior--;
+  }
+
+  return {
+    nombre: nombresMeses[indiceAnterior] + " " + anioAnterior,
+    mes: nombresMeses[indiceAnterior],
+    anio: anioAnterior
+  };
+}
+
+async function traerMesAnterior(gastoId) {
+  try {
+    const gastoActual = gastos.find(g => String(g.id) === String(gastoId));
+    if (!gastoActual) return;
+
+    const anterior = obtenerPeriodoAnterior();
+    if (!anterior) return;
+
+    setEstado("Buscando " + gastoActual.concepto + " en " + anterior.nombre + "...");
+
+    const mesAnterior = meses.find(m => m.nombre === anterior.nombre);
+
+    if (!mesAnterior) {
+      alert("No existe el período " + anterior.nombre + ".");
+      setEstado("No existe " + anterior.nombre + ".");
+      return;
+    }
+
+    const res = await db
+      .from("gastos")
+      .select("monto, asignado_j, asignado_p")
+      .eq("mes_id", mesAnterior.id)
+      .eq("concepto", gastoActual.concepto)
+      .eq("solapa", gastoActual.solapa)
+      .maybeSingle();
+
+    if (res.error) throw res.error;
+
+    if (!res.data) {
+      alert('"' + gastoActual.concepto + '" no existe en ' + anterior.nombre + ".");
+      setEstado("No se encontró el gasto en el mes anterior.");
+      return;
+    }
+
+    const input = document.querySelector("[data-gasto-id='" + gastoId + "']");
+    if (input) input.value = Number(res.data.monto) || 0;
+
+    const cj = document.querySelector("[data-j-id='" + gastoId + "']");
+    const cp = document.querySelector("[data-p-id='" + gastoId + "']");
+
+    if (cj) cj.checked = !!res.data.asignado_j;
+    if (cp) cp.checked = !!res.data.asignado_p;
+
+    calcular();
+
+    setEstado(
+      "↩️ " + gastoActual.concepto +
+      ": traído de " + anterior.nombre +
+      ". Falta guardar."
+    );
+
+  } catch (err) {
+    console.error(err);
+    setEstado("❌ Error al traer gasto anterior: " + err.message);
+  }
+}
+
+async function traerTodosMesAnterior() {
+  try {
+    const anterior = obtenerPeriodoAnterior();
+    if (!anterior) return;
+
+    const mesAnterior = meses.find(m => m.nombre === anterior.nombre);
+
+    if (!mesAnterior) {
+      alert("No existe el período " + anterior.nombre + ".");
+      return;
+    }
+
+    if (!confirm(
+      "¿Traer todos los importes de " +
+      anterior.nombre +
+      " para la solapa " +
+      (solapaActual === "martin" ? "Martín" : "SR") +
+      "?\n\nTodavía no se guardarán."
+    )) return;
+
+    setEstado("Trayendo gastos de " + anterior.nombre + "...");
+
+    const res = await db
+      .from("gastos")
+      .select("concepto, monto, solapa, asignado_j, asignado_p")
+      .eq("mes_id", mesAnterior.id)
+      .eq("solapa", solapaActual);
+
+    if (res.error) throw res.error;
+
+    const anteriores = res.data || [];
+    let encontrados = 0;
+
+    gastos
+      .filter(g => g.solapa === solapaActual)
+      .forEach(g => {
+        const viejo = anteriores.find(a =>
+          String(a.concepto).trim().toLowerCase() ===
+          String(g.concepto).trim().toLowerCase()
+        );
+
+        if (!viejo) return;
+
+        const input = document.querySelector("[data-gasto-id='" + g.id + "']");
+
+        if (input) {
+          input.value = Number(viejo.monto) || 0;
+          encontrados++;
+        }
+
+        const cj = document.querySelector("[data-j-id='" + g.id + "']");
+        const cp = document.querySelector("[data-p-id='" + g.id + "']");
+
+        if (cj) cj.checked = !!viejo.asignado_j;
+        if (cp) cp.checked = !!viejo.asignado_p;
+      });
+
+    calcular();
+
+    setEstado(
+      "↩️ " + encontrados +
+      " gastos traídos de " +
+      anterior.nombre +
+      ". Revisalos y tocá Guardar."
+    );
+
+  } catch (err) {
+    console.error(err);
+    setEstado("❌ Error al traer gastos anteriores: " + err.message);
   }
 }
 
